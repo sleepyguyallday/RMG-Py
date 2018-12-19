@@ -150,7 +150,7 @@ class ScanLog(object):
 ################################################################################
 
 
-def hinderedRotor(scanLog, pivots, top, symmetry, fit='best'):
+def hinderedRotor(scanLog, pivots, top, symmetry=None, fit='best'):
     return [scanLog, pivots, top, symmetry, fit]
 
 
@@ -313,15 +313,13 @@ class StatMechJob(object):
 
         if 'frequencyScaleFactor' in local_context:
             logging.warning('Ignoring frequency scale factor in species file {0!r}.'.format(path))
-        
-        try:
-            rotors = local_context['rotors']
-        except KeyError:
-            rotors = []
 
-        # But don't consider hindered rotors if flag is not set
-        if not self.includeHinderedRotors:
-            rotors = []
+        rotors = []
+        if self.includeHinderedRotors:
+            try:
+                rotors = local_context['rotors']
+            except KeyError:
+                pass
 
         # If hindered/free rotors are included in Statmech job, ensure that the same (freq) log file is used for
         # both the species's optimized geometry and Hessian. This approach guarantees that the geometry and Hessian
@@ -429,39 +427,51 @@ class StatMechJob(object):
             logging.debug('    Fitting {0} hindered rotors...'.format(len(rotors)))
             rotorCount = 0
             for q in rotors:
+                symmetry = None
                 if len(q) == 3:
+                    # No potential scan is given, this is a free rotor
                     pivots, top, symmetry = q
                     inertia = conformer.getInternalReducedMomentOfInertia(pivots, top) * constants.Na * 1e23
-                    rotor = FreeRotor(inertia=(inertia,"amu*angstrom^2"),symmetry=symmetry)
+                    rotor = FreeRotor(inertia=(inertia,"amu*angstrom^2"), symmetry=symmetry)
                     conformer.modes.append(rotor)
                     rotorCount += 1
-                elif len(q) == 5:
-                    scanLog, pivots, top, symmetry, fit  = q
+                elif len(q) in [4, 5]:
+                    # This is a hindered rotor
+                    if len(q) == 5:
+                        scanLog, pivots, top, symmetry, fit = q
+                    elif len(q) == 4:
+                        # the symmetry number will be derived from the scan
+                        scanLog, pivots, top, fit = q
                     # Load the hindered rotor scan energies
                     if isinstance(scanLog, Log):
                         scanLog.determine_qm_software(os.path.join(directory, scanLog.path))
                         scanLog = scanLog.software_log
                     if isinstance(scanLog, GaussianLog):
                         scanLog.path = os.path.join(directory, scanLog.path)
-                        Vlist, angle = scanLog.loadScanEnergies()
-                        scanLogOutput = ScanLog(os.path.join(directory, '{0}_rotor_{1}.txt'.format(self.species.label, rotorCount+1)))
-                        scanLogOutput.save(angle, Vlist)
+                        v_list, angle = scanLog.loadScanEnergies()
+                        scanLogOutput = ScanLog(os.path.join(directory, '{0}_rotor_{1}.txt'.format(
+                            self.species.label, rotorCount+1)))
+                        scanLogOutput.save(angle, v_list)
                     elif isinstance(scanLog, QChemLog):
                         scanLog.path = os.path.join(directory, scanLog.path)
-                        Vlist, angle = scanLog.loadScanEnergies()
-                        scanLogOutput = ScanLog(os.path.join(directory, '{0}_rotor_{1}.txt'.format(self.species.label, rotorCount+1)))
-                        scanLogOutput.save(angle, Vlist)
+                        v_list, angle = scanLog.loadScanEnergies()
+                        scanLogOutput = ScanLog(os.path.join(directory, '{0}_rotor_{1}.txt'.format(
+                            self.species.label, rotorCount+1)))
+                        scanLogOutput.save(angle, v_list)
                     elif isinstance(scanLog, ScanLog):
                         scanLog.path = os.path.join(directory, scanLog.path)
-                        angle, Vlist = scanLog.load()
+                        angle, v_list = scanLog.load()
                     else:
-                        raise Exception('Invalid log file type {0} for scan log.'.format(scanLog.__class__))
+                        raise InputError('Invalid log file type {0} for scan log.'.format(scanLog.__class__))
+
+                    if symmetry is None:
+                        symmetry = determine_rotor_symmetry(v_list, self.species.label, pivots)
                     inertia = conformer.getInternalReducedMomentOfInertia(pivots, top) * constants.Na * 1e23
 
                     cosineRotor = HinderedRotor(inertia=(inertia,"amu*angstrom^2"), symmetry=symmetry)
-                    cosineRotor.fitCosinePotentialToData(angle, Vlist)
+                    cosineRotor.fitCosinePotentialToData(angle, v_list)
                     fourierRotor = HinderedRotor(inertia=(inertia,"amu*angstrom^2"), symmetry=symmetry)
-                    fourierRotor.fitFourierPotentialToData(angle, Vlist)
+                    fourierRotor.fitFourierPotentialToData(angle, v_list)
 
                     Vlist_cosine = numpy.zeros_like(angle)
                     Vlist_fourier = numpy.zeros_like(angle)
@@ -482,6 +492,7 @@ class StatMechJob(object):
                                                 (len(v_list) - 1)) / 4184.
                         rms_fourier = numpy.sqrt(numpy.sum((Vlist_fourier - v_list) * (Vlist_fourier - v_list))/
                                                  (len(v_list) - 1)) / 4184.
+
                         # Keep the rotor with the most accurate potential
                         rotor = cosineRotor if rms_cosine < rms_fourier else fourierRotor
                         # However, keep the cosine rotor if it is accurate enough, the
@@ -492,8 +503,8 @@ class StatMechJob(object):
                             rotor = cosineRotor
 
                         conformer.modes.append(rotor)
-                        self.plotHinderedRotor(angle, Vlist, cosineRotor, fourierRotor, rotor, rotorCount, directory)
 
+                        self.plotHinderedRotor(angle, v_list, cosineRotor, fourierRotor, rotor, rotorCount, directory)
 
                         rotorCount += 1
 
@@ -560,7 +571,7 @@ class StatMechJob(object):
 
         f.close()
 
-    def plotHinderedRotor(self, angle, Vlist, cosineRotor, fourierRotor, rotor, rotorIndex, directory):
+    def plotHinderedRotor(self, angle, v_list, cosineRotor, fourierRotor, rotor, rotorIndex, directory):
         """
         Plot the potential for the rotor, along with its cosine and Fourier
         series potential fits. The plot is saved to a set of files of the form
@@ -579,7 +590,7 @@ class StatMechJob(object):
             Vlist_fourier[i] = fourierRotor.getPotential(phi[i])
 
         fig = pylab.figure(figsize=(6,5))
-        pylab.plot(angle, Vlist / 4184., 'ok')
+        pylab.plot(angle, v_list / 4184., 'ok')
         linespec = '-r' if rotor is cosineRotor else '--r'
         pylab.plot(phi, Vlist_cosine / 4184., linespec)
         linespec = '-b' if rotor is fourierRotor else '--b'
@@ -1163,3 +1174,74 @@ def assign_frequency_scale_factor(model_chemistry):
         logging.info('Assigned a frequency scale factor of {0} for model chemistry {1}'.format(
             scale_factor,model_chemistry))
     return scale_factor
+
+
+def determine_rotor_symmetry(energies, label, pivots):
+    """
+    Determine the rotor symmetry number from the potential scan given in :list:`energies` in J/mol units
+    Assumes the list represents a 360 degree scan
+    str:`label` is the species name, used for logging and error messages
+    list:`pivots` are the rotor's pivots, used for logging and error messages
+    The *worst* resolution for each peak and valley is determined.
+    The first criterion for a symmetric rotor is that the highest peak and the lowest peak must be within the
+    worst peak resolution (and the same is checked for valleys).
+    A second criterion for a symmetric rotor is that the highest and lowest peaks must be within 10% of
+    the highest peak value. This is only applied if the highest peak is above 2 kJ/mol.
+    """
+    symmetry = None
+    min_e = min(energies)
+    max_e = max(energies)
+    if max_e > 2000:
+        tol = 0.10 * max_e  # tolerance for the second criterion
+    else:
+        tol = max_e
+    peaks, valleys = list(), [energies[0]]  # the peaks and valleys of the scan
+    worst_peak_resolution, worst_valley_resolution = 0, max(energies[1] - energies[0], energies[-2] - energies[-1])
+    for i, e in enumerate(energies):
+        # identify peaks and valleys, and determine worst resolutions in the scan
+        if i != 0 and i != len(energies) - 1:
+            # this is an intermediate point in the scan
+            if e > energies[i - 1] and e > energies[i + 1]:
+                # this is a local peak
+                if any([diff > worst_peak_resolution for diff in [e - energies[i - 1], e - energies[i + 1]]]):
+                    worst_peak_resolution = max(e - energies[i - 1], e - energies[i + 1])
+                peaks.append(e)
+            elif e < energies[i - 1] and e < energies[i + 1]:
+                # this is a local valley
+                if any([diff > worst_valley_resolution for diff in [energies[i - 1] - e, energies[i + 1] - e]]):
+                    worst_valley_resolution = max(energies[i - 1] - e, energies[i + 1] - e)
+                valleys.append(e)
+    # The number of peaks and valley must always be the same (what goes up must come down), if it isn't then there's
+    # something seriously wrong with the scan
+    if len(peaks) != len(valleys):
+        raise InputError('Rotor of species {0} between pivots {1} does not have the same number'
+                         ' of peaks and valleys.'.format(label, pivots))
+    min_peak = min(peaks)
+    max_peak = max(peaks)
+    min_valley = min(valleys)
+    max_valley = max(valleys)
+    # Criterion 1: worst resolution
+    if max_peak - min_peak > worst_peak_resolution:
+        # The rotor cannot be symmetric
+        symmetry = 1
+        reason = 'worst peak resolution criterion'
+    elif max_valley - min_valley > worst_valley_resolution:
+        # The rotor cannot be symmetric
+        symmetry = 1
+        reason = 'worst valley resolution criterion'
+    # Criterion 2: 10% * max_peak
+    elif max_peak - min_peak > tol:
+        # The rotor cannot be symmetric
+        symmetry = 1
+        reason = '10% of the maximum peak criterion'
+    else:
+        # We declare this rotor as symmetric and the symmetry number in the number of peaks (and valleys)
+        symmetry = len(peaks)
+        reason = 'number of peaks and valleys, all within the determined resolution criteria'
+    if symmetry not in [1, 2, 3]:
+        logging.warn('Determined symmetry number {0} for rotor of species {1} between pivots {2};'
+                     ' you should make sure this makes sense'.format(symmetry, label, pivots))
+    else:
+        logging.info('Determined a symmetry number of {0} for rotor of species {1} between pivots {2}'
+                     ' based on the {3}.'.format(symmetry, label, pivots, reason))
+    return symmetry
