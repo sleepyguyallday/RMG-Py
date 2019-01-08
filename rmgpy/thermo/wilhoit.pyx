@@ -119,7 +119,6 @@ cdef class Wilhoit(HeatCapacityModel):
         output_dict['a3'] = self.a3
         return output_dict
 
-
     cpdef make_object(self, dict data, dict class_dict):
         """
         A helper function for YAML parsing
@@ -140,8 +139,6 @@ cdef class Wilhoit(HeatCapacityModel):
         data['a3'] = float(data['a3'])
         del data['E0']
         self.__init__(**data)
-
-
 
     property B:
         """The Wilhoit scaled temperature coefficient."""
