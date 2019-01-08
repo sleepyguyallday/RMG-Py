@@ -41,7 +41,7 @@ except ImportError:
     from yaml import Dumper, Loader, SafeLoader
 
 from rmgpy.rmgobject import RMGObject
-from rmgpy import __version__ as version
+from rmgpy import __version__
 from rmgpy.quantity import ScalarQuantity, ArrayQuantity
 from rmgpy.molecule.element import elementList
 from rmgpy.molecule.translator import toInChI, toInChIKey
@@ -100,7 +100,7 @@ class ArkaneSpecies(RMGObject):
         self.thermo_data = thermo_data
         if species is not None:
             self.update_species_attributes(species)
-        self.RMG_version = RMG_version if RMG_version is not None else version
+        self.RMG_version = RMG_version if RMG_version is not None else __version__
         self.datetime = datetime if datetime is not None else time.strftime("%Y-%m-%d %H:%M")
 
     def __repr__(self):
@@ -188,15 +188,12 @@ class ArkaneSpecies(RMGObject):
         filename = os.path.join('ArkaneSpecies',
                                 ''.join(c for c in self.label if c in valid_chars) + '.yml')
         full_path = os.path.join(path, filename)
-        with open(full_path, 'w') as f:
-            yaml.dump(data=self.as_dict(), stream=f, canonical=False)
+        content = yaml.dump(data=self.as_dict(), Dumper=Dumper)
         # remove empty lines from the file (multi-line strings have excess new line brakes for some reason):
-        with open(full_path, 'r') as f:
-            lines = f.readlines()
+        content = content.replace('\n\n', '\n')
+        logging.info(content)
         with open(full_path, 'w') as f:
-            for line in lines:
-                if not line.isspace():
-                    f.write(line)
+            f.write(content)
         logging.debug('Dumping species {0} data as {1}'.format(self.label, filename))
 
     def load_yaml(self, path, species, pdep=False):
