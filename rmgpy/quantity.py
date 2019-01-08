@@ -203,11 +203,11 @@ class ScalarQuantity(Units):
         # the `class_dict` parameter isn't used here, it is passed by default when calling the `make_object()` methods
         if 'units' in data:
             self.units = data['units']
-        self.setValue(data['value'])
+        self.value = data['value']
         if 'uncertaintyType' in data:
-            self.setUncertaintyType(data['uncertaintyType'])
+            self.uncertaintyType = data['uncertaintyType']
         if 'uncertainty' in data:
-            self.setUncertainty(data['uncertainty'])
+            self.uncertainty = data['uncertainty']
     
     def copy(self):
         """
@@ -311,6 +311,7 @@ class ScalarQuantity(Units):
 
 ################################################################################
 
+
 class ArrayQuantity(Units):
     """
     The :class:`ArrayQuantity` class provides a representation of an array of
@@ -335,9 +336,9 @@ class ArrayQuantity(Units):
     speed.
     """
 
-    def __init__(self, value=numpy.array([0.0]), units='', uncertainty=None, uncertaintyType='+|-'):
+    def __init__(self, value=None, units='', uncertainty=None, uncertaintyType='+|-'):
         Units.__init__(self, units)
-        self.value = value
+        self.value = value if value is not None else numpy.array([0.0])
         self.uncertaintyType = uncertaintyType
         if uncertainty is None or numpy.array_equal(uncertainty, numpy.array([0.0])):
             self.uncertainty = numpy.zeros_like(self.value)
@@ -445,11 +446,11 @@ class ArrayQuantity(Units):
         # the `class_dict` parameter isn't used here, it is passed by default when calling the `make_object()` methods
         if 'units' in data:
             self.units = data['units']
-        self.setValue(data['value'])
+        self.value = data['value']
         if 'uncertaintyType' in data:
-            self.setUncertaintyType(data['uncertaintyType'])
+            self.uncertaintyType = data['uncertaintyType']
         if 'uncertainty' in data:
-            self.setUncertainty(data['uncertainty'])
+            self.uncertainty = data['uncertainty']
 
     def copy(self):
         """
