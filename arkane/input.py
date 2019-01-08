@@ -214,12 +214,11 @@ def species(label, *args, **kwargs):
         else:
             if structure:
                 # If a structure was given, simply calling spec.molecularWeight will calculate the molecular weight
-                spec.molecularWeight = spec.molecularWeight
-            elif is_pdep(jobList):
-                # If one of the jobs is pdep and no molecular weight is given or calculated, raise an error
-                raise ValueError("No molecularWeight was entered for species {0}. Since a structure wasn't given"
-                                 " as well, the molecularWeight, which is important for pressure dependent jobs,"
-                                 " cannot be reconstructed.".format(spec.label))
+                if spec.molecularWeight is None and is_pdep(jobList):
+                    # If one of the jobs is pdep and no molecular weight is given or calculated, raise an error
+                    raise ValueError("No molecularWeight was entered for species {0}. Since a structure wasn't given"
+                                     " as well, the molecularWeight, which is important for pressure dependent jobs,"
+                                     " cannot be reconstructed.".format(spec.label))
         spec.transportData = collisionModel
         spec.energyTransferModel = energyTransferModel
         spec.thermo = thermo
