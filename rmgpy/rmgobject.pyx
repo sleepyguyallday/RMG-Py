@@ -1,10 +1,11 @@
-# cython: embedsignature=True, cdivision=True
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 ###############################################################################
 #                                                                             #
 # RMG - Reaction Mechanism Generator                                          #
 #                                                                             #
-# Copyright (c) 2002-2018 Prof. William H. Green (whgreen@mit.edu),           #
+# Copyright (c) 2002-2019 Prof. William H. Green (whgreen@mit.edu),           #
 # Prof. Richard H. West (r.west@neu.edu) and the RMG Team (rmg_dev@mit.edu)   #
 #                                                                             #
 # Permission is hereby granted, free of charge, to any person obtaining a     #
@@ -62,7 +63,7 @@ cdef class RMGObject(object):
             elif not isinstance(val, (int, float, str, dict)):
                 if isinstance(val, np.ndarray):
                     output_dict[key] = val.tolist()
-                elif val is not None:
+                else:
                     # this is an object, call as_dict() again
                     output_dict[key] = val.as_dict()
         return output_dict
@@ -98,9 +99,9 @@ cdef class RMGObject(object):
                                        "to make the object.".format(class_name))
                     obj = class_to_make()
                     if class_name in ['LinearRotor', 'NonlinearRotor', 'KRotor', 'SphericalTopRotor', 'HinderedRotor',
-                                      'FreeRotor'] and 'rotationalConstant' in entry:
-                        if 'inertia' in entry:
-                            # Either `rotationalConstant` or `inertia` should be specified for a rotor, not both
+                                      'FreeRotor'] and 'rotationalConstant' in entry and 'inertia' in entry:
+                            # Either `rotationalConstant` or `inertia` should be specified for a rotor.
+                            # Here both are specified, so we delete `inertia`.
                             del entry['inertia']
                     obj.make_object(entry, class_dict)
                     logging.debug("made object {0}".format(class_name))
