@@ -125,6 +125,7 @@ cdef class HinderedRotor(Torsion):
         self.fourier = fourier
         self.semiclassical = False if quantum else semiclassical
         self.quantum = quantum
+        self.frequency = frequency if frequency is not None else 0.0
         
     def __repr__(self):
         """
