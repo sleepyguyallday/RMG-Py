@@ -191,7 +191,6 @@ class ArkaneSpecies(RMGObject):
         content = yaml.dump(data=self.as_dict(), Dumper=Dumper)
         # remove empty lines from the file (multi-line strings have excess new line brakes for some reason):
         content = content.replace('\n\n', '\n')
-        logging.info(content)
         with open(full_path, 'w') as f:
             f.write(content)
         logging.debug('Dumping species {0} data as {1}'.format(self.label, filename))
