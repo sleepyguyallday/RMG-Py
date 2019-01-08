@@ -203,7 +203,7 @@ class StatMechJob(object):
         _, file_extension = os.path.splitext(path)
         if file_extension in ['.yml', '.yaml']:
             if TS:
-                raise ValueError('Loading transition states from a YAML file is still unsupported.')
+                raise NotImplementedError('Loading transition states from a YAML file is still unsupported.')
             self.arkane_species.load_yaml(path=path, species=self.species, pdep=pdep)
             self.species.conformer = self.arkane_species.conformer
             self.species.transportData = self.arkane_species.transport_data
